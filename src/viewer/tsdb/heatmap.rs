@@ -15,14 +15,6 @@ pub struct HeatmapData {
 }
 
 impl Heatmap {
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    pub fn insert(&mut self, id: usize, series: UntypedSeries) {
-        self.inner.insert(id, series);
-    }
-
     pub fn as_data(&self) -> HeatmapData {
         let mut timestamps = BTreeSet::new();
         let mut min_value = f64::MAX;
@@ -115,7 +107,7 @@ fn format_timestamp(unix_seconds: f64) -> String {
     let hours = (ms / (1000 * 60 * 60)) % 24;
 
     // Format time as HH:MM:SS
-    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
 }
 
 impl Div<Heatmap> for Heatmap {
