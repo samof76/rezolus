@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM rust:1 AS builder
+FROM --platform=$BUILDPLATFORM rust:1.89.0 AS builder
 
 # Install cross-compilation tools and libraries for both architectures
 RUN dpkg --add-architecture arm64 && \
@@ -26,6 +26,7 @@ RUN rustup target add x86_64-unknown-linux-gnu && \
 
 # Define build argument for target platform
 ARG TARGETPLATFORM
+ARG TARGETARCH
 
 # Set up cross-compilation environment
 RUN case "$TARGETPLATFORM" in \
@@ -43,8 +44,22 @@ RUN case "$TARGETPLATFORM" in \
     ;; \
     esac
 
+# Latest releases available at https://github.com/aptible/supercronic/releases
+ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.34/supercronic-linux-${TARGETARCH} \
+    SUPERCRONIC=supercronic-linux-${TARGETARCH}
+
+# Setup Supercronic
+RUN curl -fsSLO "$SUPERCRONIC_URL" \
+    && chmod +x "$SUPERCRONIC" \
+    && mv "$SUPERCRONIC" "/usr/local/bin/supercronic"
+
+RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_${TARGETARCH} \
+    && chmod +x /usr/local/bin/dumb-init
+
+FROM --platform=$BUILDPLATFORM rclone/rclone:master AS rclone
+
 # Final stage: create minimal runtime image
-FROM debian:bookworm-slim
+FROM debian:trixie-20250811-slim
 
 # Install runtime dependencies
 RUN dpkg --add-architecture arm64 && \
@@ -60,6 +75,9 @@ RUN dpkg --add-architecture arm64 && \
 
 # Copy the built binary
 COPY --from=builder /app/rezolus /usr/local/bin/rezolus
+COPY --from=builder /usr/local/bin/supercronic /usr/local/bin/supercronic
+COPY --from=builder /usr/local/bin/dumb-init /usr/local/bin/dumb-init
+COPY --from=rclone /usr/local/bin/rclone /usr/local/bin/rclone
 
-# Set the entrypoint
-ENTRYPOINT ["/usr/local/bin/rezolus"]
+# Runs "/usr/bin/dumb-init -- /my/script --with --args"
+ENTRYPOINT ["/usr/local/bin/dumb-init", "--"]
